@@ -3,9 +3,13 @@ import Foundation
 
 /// 스크롤 이벤트 소스 타입
 enum ScrollEventSource {
-    case mouse      // 일반 마우스 휠 (이산 스크롤)
-    case trackpad   // 트랙패드/Magic Mouse (연속 스크롤)
+    case mouse      // 일반 마우스 휠 (discrete scroll)
+    case trackpad   // 트랙패드/Magic Mouse (continuous scroll)
 }
+
+/// 스크롤 방식
+/// - Natural: 콘텐츠가 손가락/휠 방향을 따라감 (터치스크린 방식)
+/// - Traditional: 스크롤바 조작 방식 (휠 아래 = 페이지 다운)
 
 /// 스크롤 이벤트 인터셉터
 /// CGEventTap을 사용하여 시스템 레벨에서 스크롤 이벤트를 가로채고 수정
@@ -16,12 +20,11 @@ class ScrollInterceptor {
     private var runLoopSource: CFRunLoopSource?
     private var isRunning = false
 
-    // 설정 옵션
-    var invertMouseScroll = true       // 마우스 스크롤 반전
-    var invertTrackpadScroll = false   // 트랙패드 스크롤 반전 (기본: Natural 유지)
-    var invertVertical = true          // 수직 스크롤 반전
-    var invertHorizontal = false       // 수평 스크롤 반전
-    var verbose = false                // 디버그 출력
+    // 설정 옵션 (Natural Scrolling 기준)
+    var trackpadNatural = true    // 트랙패드: Natural 방식 사용 (기본값)
+    var mouseNatural = false      // 마우스: Traditional 방식 사용 (기본값)
+    var applyHorizontal = false   // 수평 스크롤에도 적용
+    var verbose = false           // 디버그 출력
 
     private init() {}
 
@@ -43,41 +46,40 @@ class ScrollInterceptor {
             return Unmanaged.passRetained(event)
         }
 
-        // 입력 소스 감지 (핵심 로직)
+        // 입력 소스 감지
         let source = detectSource(event: event)
 
-        // 반전 여부 결정
-        let shouldInvert: Bool
+        // Traditional 방식으로 변환 필요 여부 결정
+        // Natural이 아닌 경우 = Traditional = 반전 필요
+        let needsConversion: Bool
         switch source {
-        case .mouse:
-            shouldInvert = interceptor.invertMouseScroll
         case .trackpad:
-            shouldInvert = interceptor.invertTrackpadScroll
+            needsConversion = !interceptor.trackpadNatural  // Natural이 아니면 변환
+        case .mouse:
+            needsConversion = !interceptor.mouseNatural     // Natural이 아니면 변환
         }
 
         if interceptor.verbose {
             let deltaY = event.getIntegerValueField(.scrollWheelEventDeltaAxis1)
             let deltaX = event.getIntegerValueField(.scrollWheelEventDeltaAxis2)
-            print("[\(source)] deltaY: \(deltaY), deltaX: \(deltaX), invert: \(shouldInvert)")
+            let mode = needsConversion ? "Traditional" : "Natural"
+            print("[\(source)] deltaY: \(deltaY), deltaX: \(deltaX), mode: \(mode)")
         }
 
-        // 스크롤 반전 적용
-        if shouldInvert {
-            // 수직 스크롤 반전
-            if interceptor.invertVertical {
-                let deltaY = event.getIntegerValueField(.scrollWheelEventDeltaAxis1)
-                event.setIntegerValueField(.scrollWheelEventDeltaAxis1, value: -deltaY)
+        // Traditional 방식으로 변환 (Natural → Traditional: 방향 반전)
+        if needsConversion {
+            // 수직 스크롤 변환
+            let deltaY = event.getIntegerValueField(.scrollWheelEventDeltaAxis1)
+            event.setIntegerValueField(.scrollWheelEventDeltaAxis1, value: -deltaY)
 
-                // FixedPt와 PointDelta도 함께 반전 (일관성 유지)
-                let fixedY = event.getDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1)
-                event.setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1, value: -fixedY)
+            let fixedY = event.getDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1)
+            event.setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1, value: -fixedY)
 
-                let pointY = event.getIntegerValueField(.scrollWheelEventPointDeltaAxis1)
-                event.setIntegerValueField(.scrollWheelEventPointDeltaAxis1, value: -pointY)
-            }
+            let pointY = event.getIntegerValueField(.scrollWheelEventPointDeltaAxis1)
+            event.setIntegerValueField(.scrollWheelEventPointDeltaAxis1, value: -pointY)
 
-            // 수평 스크롤 반전
-            if interceptor.invertHorizontal {
+            // 수평 스크롤 변환 (옵션)
+            if interceptor.applyHorizontal {
                 let deltaX = event.getIntegerValueField(.scrollWheelEventDeltaAxis2)
                 event.setIntegerValueField(.scrollWheelEventDeltaAxis2, value: -deltaX)
 
@@ -96,12 +98,12 @@ class ScrollInterceptor {
     /// kCGScrollWheelEventIsContinuous 필드를 사용하여 트랙패드와 마우스 구분
     private static func detectSource(event: CGEvent) -> ScrollEventSource {
         // 핵심: isContinuous 필드로 구분
-        // - 0: 트랙패드 (픽셀 단위 연속 스크롤)
-        // - 1: 마우스 휠 (라인 단위 이산 스크롤)
+        // - 0: 마우스 휠 (라인 단위 이산 스크롤)
+        // - 1: 트랙패드 (픽셀 단위 연속 스크롤)
         let isContinuous = event.getIntegerValueField(.scrollWheelEventIsContinuous)
 
         if isContinuous != 0 {
-            return .mouse
+            return .trackpad
         }
 
         // isContinuous == 0: 추가 검증
@@ -113,8 +115,8 @@ class ScrollInterceptor {
             return .trackpad
         }
 
-        // 기본적으로 트랙패드
-        return .trackpad
+        // 기본적으로 마우스
+        return .mouse
     }
 
     /// 접근성 권한 확인
@@ -166,8 +168,8 @@ class ScrollInterceptor {
 
         isRunning = true
         print("ScrollInterceptor started")
-        print("  - Mouse scroll invert: \(invertMouseScroll)")
-        print("  - Trackpad scroll invert: \(invertTrackpadScroll)")
+        print("  - Trackpad: \(trackpadNatural ? "Natural" : "Traditional")")
+        print("  - Mouse: \(mouseNatural ? "Natural" : "Traditional")")
 
         return true
     }

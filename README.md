@@ -2,17 +2,24 @@
 
 macOS에서 트랙패드와 마우스의 스크롤 방향을 개별적으로 설정하는 유틸리티입니다.
 
+## 스크롤 방식
+
+| 방식 | 설명 | 동작 |
+|------|------|------|
+| **Natural** | 콘텐츠가 손가락/휠 방향을 따라감 | 위로 스와이프 → 콘텐츠 위로 |
+| **Traditional** | 스크롤바 조작 방식 | 휠 아래 → 페이지 다운 |
+
 ## 문제
 
 macOS는 트랙패드와 마우스의 스크롤 방향 설정이 연동되어 있습니다:
-- "자연스러운 스크롤"을 켜면 → 트랙패드 ✓, 마우스 ✗
-- "자연스러운 스크롤"을 끄면 → 트랙패드 ✗, 마우스 ✓
+- "자연스러운 스크롤" ON → 트랙패드 Natural ✓, 마우스 Natural ✗ (불편)
+- "자연스러운 스크롤" OFF → 트랙패드 Traditional ✗ (불편), 마우스 Traditional ✓
 
 ## 해결
 
-ScrollSwitcher는 입력 장치를 실시간 감지하여 각각 다른 스크롤 방향을 적용합니다:
-- **트랙패드**: Natural scrolling 유지 (손가락 방향 = 콘텐츠 방향)
-- **마우스**: Traditional scrolling (휠 아래 = 페이지 아래)
+ScrollSwitcher는 입력 장치를 실시간 감지하여 각각 다른 스크롤 방식을 적용합니다:
+- **트랙패드**: Natural 유지 (터치스크린처럼 자연스럽게)
+- **마우스**: Traditional 적용 (휠 아래 = 페이지 다운)
 
 ## 설치
 
@@ -23,7 +30,7 @@ ScrollSwitcher는 입력 장치를 실시간 감지하여 각각 다른 스크�
 ### 빠른 설치
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/ScrollSwitcher.git
+git clone https://github.com/metterian/ScrollSwitcher.git
 cd ScrollSwitcher
 ./install.sh
 ```
@@ -49,13 +56,13 @@ swift build -c release
 ## 사용법
 
 ```bash
-# 기본 실행 (마우스만 반전)
+# 기본 실행 (트랙패드: Natural, 마우스: Traditional)
 ScrollSwitcher
 
 # 디버그 모드
 ScrollSwitcher --verbose
 
-# 옵션
+# 도움말
 ScrollSwitcher --help
 ```
 
@@ -63,10 +70,18 @@ ScrollSwitcher --help
 
 | 옵션 | 설명 |
 |------|------|
+| `--help`, `-h` | 도움말 출력 |
 | `--verbose`, `-v` | 디버그 출력 활성화 |
-| `--invert-trackpad` | 트랙패드 스크롤도 반전 |
-| `--no-invert-mouse` | 마우스 스크롤 반전 비활성화 |
-| `--invert-horizontal` | 수평 스크롤도 반전 |
+| `--trackpad-traditional` | 트랙패드를 Traditional 방식으로 변경 |
+| `--mouse-natural` | 마우스를 Natural 방식으로 변경 |
+| `--horizontal` | 수평 스크롤에도 동일하게 적용 |
+
+### 기본 동작
+
+| 장치 | 기본 방식 | 옵션으로 변경 |
+|------|----------|--------------|
+| 트랙패드 | Natural | `--trackpad-traditional` |
+| 마우스 | Traditional | `--mouse-natural` |
 
 ## 관리
 
@@ -92,13 +107,15 @@ cat /tmp/scrollswitcher.log
 CGEventTap을 사용하여 시스템 레벨에서 스크롤 이벤트를 가로챕니다:
 
 ```
-스크롤 이벤트 → isContinuous 필드 확인 → 장치 판별 → 조건부 반전
+스크롤 이벤트 → isContinuous 필드 확인 → 장치 판별 → 스크롤 방식 적용
 ```
 
-| `isContinuous` | 장치 | 동작 |
-|----------------|------|------|
-| 0 | 트랙패드 | 그대로 통과 |
-| ≠0 | 마우스 | delta 반전 |
+### 장치 감지
+
+| `isContinuous` | 장치 | 기본 동작 |
+|----------------|------|----------|
+| 0 | 마우스 | Traditional (Natural → Traditional 변환) |
+| ≠0 | 트랙패드 | Natural (변환 없음) |
 
 ### 리소스 사용
 
