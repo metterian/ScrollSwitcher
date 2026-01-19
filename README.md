@@ -1,6 +1,6 @@
 # ScrollSwitcher
 
-macOS에서 트랙패드와 마우스의 스크롤 방향을 개별적으로 설정하는 유틸리티입니다.
+macOS에서 트랙패드와 마우스의 스크롤 방향을 자동으로 전환하는 유틸리티입니다.
 
 ## 스크롤 방식
 
@@ -17,9 +17,9 @@ macOS는 트랙패드와 마우스의 스크롤 방향 설정이 연동되어 �
 
 ## 해결
 
-ScrollSwitcher는 입력 장치를 실시간 감지하여 각각 다른 스크롤 방식을 적용합니다:
-- **트랙패드**: Natural 유지 (터치스크린처럼 자연스럽게)
-- **마우스**: Traditional 적용 (휠 아래 = 페이지 다운)
+ScrollSwitcher는 입력 장치를 실시간 감지하여 macOS 시스템 설정을 자동으로 전환합니다:
+- **트랙패드 감지** → Natural Scrolling ON
+- **마우스 감지** → Natural Scrolling OFF (Traditional)
 
 ## 설치
 
@@ -72,16 +72,15 @@ ScrollSwitcher --help
 |------|------|
 | `--help`, `-h` | 도움말 출력 |
 | `--verbose`, `-v` | 디버그 출력 활성화 |
-| `--trackpad-traditional` | 트랙패드를 Traditional 방식으로 변경 |
-| `--mouse-natural` | 마우스를 Natural 방식으로 변경 |
-| `--horizontal` | 수평 스크롤에도 동일하게 적용 |
+| `--trackpad-traditional` | 트랙패드 감지 시 Traditional로 전환 |
+| `--mouse-natural` | 마우스 감지 시 Natural로 전환 |
 
 ### 기본 동작
 
-| 장치 | 기본 방식 | 옵션으로 변경 |
-|------|----------|--------------|
-| 트랙패드 | Natural | `--trackpad-traditional` |
-| 마우스 | Traditional | `--mouse-natural` |
+| 장치 감지 | 시스템 설정 변경 | 옵션으로 반전 |
+|----------|-----------------|--------------|
+| 트랙패드 | Natural ON | `--trackpad-traditional` |
+| 마우스 | Natural OFF | `--mouse-natural` |
 
 ## 관리
 
@@ -104,22 +103,31 @@ cat /tmp/scrollswitcher.log
 
 ## 작동 원리
 
-CGEventTap을 사용하여 시스템 레벨에서 스크롤 이벤트를 가로챕니다:
+CGEventTap으로 스크롤 이벤트를 감지하고, 입력 장치가 변경되면 macOS 시스템 설정을 자동으로 전환합니다:
 
 ```
-스크롤 이벤트 → isContinuous 필드 확인 → 장치 판별 → 스크롤 방식 적용
+스크롤 이벤트 → isContinuous 필드로 장치 판별 → 장치 변경 시 시스템 설정 전환
 ```
 
 ### 장치 감지
 
-| `isContinuous` | 장치 | 기본 동작 |
-|----------------|------|----------|
-| 0 | 마우스 | Traditional (Natural → Traditional 변환) |
-| ≠0 | 트랙패드 | Natural (변환 없음) |
+| `isContinuous` | 장치 | 시스템 설정 변경 |
+|----------------|------|-----------------|
+| 0 | 마우스 | `defaults write ... -bool false` |
+| ≠0 | 트랙패드 | `defaults write ... -bool true` |
+
+### 설정 변경 방식
+
+```bash
+# Natural Scrolling 토글
+defaults write NSGlobalDomain com.apple.swipescrolldirection -bool [true/false]
+# 설정 즉시 적용
+/System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u
+```
 
 ### 리소스 사용
 
-- **CPU**: 이벤트 기반, 스크롤 시에만 동작 (~0%)
+- **CPU**: 이벤트 기반, 장치 전환 시에만 설정 변경 (~0%)
 - **메모리**: ~2MB
 - **배터리**: 영향 없음
 
